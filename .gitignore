@@ -48,3 +48,10 @@ projects/msvc10/GeneratedFiles
 /projects/msvc10/Release/rc.read.1.tlog
 /projects/msvc10/Release/rc.write.1.tlog
 /projects/msvc10/mariamole.opensdf
+/src/*.bak
+/projects/msvc10/Release/*.log
+/src/git_version.h
+/temp
+/projects/msvc10/temp
+/src/preferences.old.ui
+/src/wizard2.ui

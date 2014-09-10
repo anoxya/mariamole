@@ -26,9 +26,9 @@ public:
 	Wizard(QWidget *parent = 0);
 	~Wizard();
 
-	bool NewFile(void);
+	bool NewFile(Project * project);
 	QString GetNewFileName(void);
-	bool ImportLibrary(void);
+	bool ImportLibrary(QString projectName);
 	bool NewProject(void);	
 	QString GetLibraryName(void);
 
@@ -41,7 +41,7 @@ private:
 	void PopulateLibrariesList(void);
 	void PopulateExamplesTree(void);
 	void ListExamples(QStringList &examples);	
-	void GetExamplesDirectoriesRecursivelly(QString path, QStringList &examples);
+    void GetExamplesDirectoriesRecursivelly(int level, QString path, QStringList &examples);
 	void GetExamplesNamesRecursivelly(QString hierarchy, QString path, QStringList &examples);
 	bool CreateTheSelectedProject(void);
 	
@@ -57,6 +57,9 @@ private slots:
 	void listLibsClicked (QListWidgetItem * item);
 	void examplesTreeClicked (QTreeWidgetItem * item, int column);
 	void OnSelectSketchFile(void);
+
+private:
+	Project * currentProject;
 
 };
 

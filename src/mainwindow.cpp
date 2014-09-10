@@ -2,10 +2,11 @@
 
 //-----------------------------------------------------------------------------
 #include <iostream>
-using namespace std;
+//using namespace std;
 
 MainWindow::MainWindow(QWidget *parent)
-	: QMainWindow(parent)
+    : QMainWindow(parent)//,
+
 {
 	ui.setupUi(this);		
 	
@@ -24,6 +25,9 @@ MainWindow::MainWindow(QWidget *parent)
 			case 202:
 			case 203:
 			case 204: msg = "Error reading configuration file 'hardware.xml'"; break;
+			
+			case 205: 
+			case 206: msg = "Error reading configuration file 'color_themes.xml'"; break;
 			default: msg = "Generic error while loadinh the configuration file";
 		}
 		QMessageBox msgBox;
@@ -41,11 +45,11 @@ MainWindow::MainWindow(QWidget *parent)
 	connect(timer, SIGNAL(timeout()), this, SLOT(update()));
     timer->start(100);
 
-    QPalette palette = ui.menuBar->palette();
-	palette.setColor(QPalette::Button,  ui.mainToolBar->palette().color(QPalette::Window));
-	ui.menuBar->setPalette(palette);
+    //QPalette palette = ui.menuBar->palette();
+	//palette.setColor(QPalette::Button,  ui.mainToolBar->palette().color(QPalette::Window));
+	//ui.menuBar->setPalette(palette);
 
-    buildWindow = new BuildWindow();
+    //buildWindow = new BuildWindow();
 	
 	ui.buildStatus->setCurrentIndex(0);
 
@@ -54,6 +58,7 @@ MainWindow::MainWindow(QWidget *parent)
 	//ui.editorTabs->clear();  //removes all the previous tabs
 	tabsEditor = new EditorTab(this);
 	connect(tabsEditor, SIGNAL(codeChanged()), this, SLOT(OnProjectModified()));
+	connect(tabsEditor, SIGNAL(uploadCode()), this, SLOT(UploadProgram()));
 	//ui.tabParent->addWidget(tabsEditor);
 	ui.splitter->addWidget(tabsEditor);
 
@@ -62,35 +67,44 @@ MainWindow::MainWindow(QWidget *parent)
 	CreateTreeContextMenu();
 
 	// Load stylesheet
-	QString cssFileName =  qApp->applicationDirPath() + "/config/style_main.css";
+	LoadStyleSheet(ui.messageTabs, "style_main.css");
+	/*QString cssFileName =  qApp->applicationDirPath() + "/config/style_main.css";
 	QFile cssFile(cssFileName);
 	cssFile.open(QFile::ReadOnly | QFile::Text);
     QTextStream css(&cssFile);
 	QString styleText = css.readAll();
-	ui.messageTabs->setStyleSheet(styleText);
+	ui.messageTabs->setStyleSheet(styleText);*/
+
 	ui.actionSave_Workspace->setData(0);
 	if (QDir(config.workspace).exists()){
 		OpenWorkspace();	
 	}
+
+    builder = new Builder(this);
+	builder->setVisible(false);
+    launcher = new Launcher(this);	
+
 }
 
 //-----------------------------------------------------------------------------
 
 void MainWindow::CreateMainMenuContext(void)
 {
+	//ui.actionTemp1->setVisible(false);
+	//ui.actionTemp2->setVisible(false);
+
+	LoadStyleSheet(ui.menuFile, "style_menu.css");
+	LoadStyleSheet(ui.menuEdit, "style_menu.css");
+	LoadStyleSheet(ui.menuProject, "style_menu.css");
+	LoadStyleSheet(ui.menuHelp, "style_menu.css");
+
 	if (config.useMenuButton) {
 		mainMenu = new QMenu(this);
 		LoadStyleSheet(mainMenu, "style_menu.css");
-
-		//ui.actionMainMenuButton->setMenu(mainMenu);
-		//ui.actionMainMenuButton->set
-		//ui.actionMainMenuButton->popsetPopupMode(QToolButton::InstantPopup);
-		//mainMenu->setStyleSheet(ui.menuBar->styleSheet());			
-		//ui.mainToolBar->insertSeparator(ui.actionSelect_workspace);
 		ui.menuBar->setVisible(false);	
-		ui.actionMainMenuButton->setVisible(true);		
-		connect(ui.actionMainMenuButton, SIGNAL(triggered()), this,SLOT(ShowMainMenu()));
-		connect(ui.actionSeparator, SIGNAL(triggered()), this,SLOT(ShowMainMenu()));
+		ui.actionMainMenu2->setVisible(true);		
+		bool c = connect(ui.actionMainMenu2, SIGNAL(triggered()), this, SLOT(ShowMainMenu()));
+		c = connect(ui.actionMenu3, SIGNAL(triggered()), this,SLOT(ShowMainMenu()));
 		mainMenu->addMenu(ui.menuFile);
 		mainMenu->addMenu(ui.menuEdit);
 		mainMenu->addMenu(ui.menuProject);
@@ -98,10 +112,12 @@ void MainWindow::CreateMainMenuContext(void)
 		mainMenu->addSeparator();
 		mainMenu->addAction(ui.actionExit);
 	} else {
-		ui.actionMainMenuButton->setVisible(false);	
-		ui.actionSeparator->setVisible(false);		
+		ui.actionMainMenu2->setVisible(false);	
+		ui.actionMenu3->setVisible(false);		
 		ui.menuBar->setVisible(true);	
 	}
+
+	//qDebug() << "Here is:" << qApp->applicationDirPath();
 }
 
 //-----------------------------------------------------------------------------
@@ -122,7 +138,7 @@ void MainWindow::CreateTreeContextMenu(void)
 	ui.tree->setContextMenuPolicy(Qt::CustomContextMenu);
 	LoadStyleSheet(projectContext, "style_menu.css");
 	//projectContext->setStyleSheet(ui.menuBar->styleSheet());
-	bool ok = connect(ui.tree, SIGNAL(customContextMenuRequested(const QPoint &)),
+    connect(ui.tree, SIGNAL(customContextMenuRequested(const QPoint &)),
 		this,SLOT(ShowTreeMenu(const QPoint )));
 
 	QAction * action = projectContext->addAction("Set default project");
@@ -212,6 +228,7 @@ void MainWindow::SetDefaultProject(void)
 void MainWindow::EditProjectProperties(void)
 {
 	if (ui.tree->selectedItems().count() != 1) {
+		ErrorMessage("No project selected!");		
 		return;
 	}
 
@@ -220,17 +237,19 @@ void MainWindow::EditProjectProperties(void)
 	//QString text = item->text(0);
 
 	if (item->data(0,255) != WorskspaceTree::Project) {
+		ErrorMessage("No project selected!");		
 		return;
 	}
 
 	workspace.SetCurrentProject(item->text(0));
 
 	if (workspace.GetCurrentProject() == NULL) {
+		ErrorMessage("No project selected!");		
 		return;
 	}
 
 	if (workspace.GetCurrentProject()->name == item->text(0)) {
-		ProjectProperties * prop = new ProjectProperties();
+		ProjectProperties * prop = new ProjectProperties(this);
 		if (prop->Edit(workspace.GetCurrentProject())) {
 			workspace.GetCurrentProject()->rebuild = true;
 			SetProjectModified();
@@ -330,7 +349,7 @@ void MainWindow::setupActions()
     //Save Action
 
 	//Build project Action
-	ui.actionBuild_project->setShortcut(tr("Ctrl+B"));
+	//ui.actionBuild_project->setShortcut(tr("Ctrl+B"));
     ui.actionBuild_project->setStatusTip(tr("Build the current project"));
 	connect(ui.actionBuild_project, SIGNAL(triggered()), this, SLOT(BuildProject()));
 
@@ -340,14 +359,14 @@ void MainWindow::setupActions()
 	connect(ui.actionClean_current_project, SIGNAL(triggered()), this, SLOT(CleanProject()));
 
 	//Upload program Action	
-	ui.actionBuild_and_upload_project->setShortcut(tr("Ctrl+U"));
+	//ui.actionBuild_and_upload_project->setShortcut(tr("Ctrl+U"));
     ui.actionBuild_and_upload_project->setStatusTip(tr("Upload the current project to the board, building it if necessary"));
 	connect(ui.actionBuild_and_upload_project, SIGNAL(triggered()), this, SLOT(UploadProgram()));
 
 	// set workspace
 	ui.actionSelect_workspace->setShortcut(tr("Ctrl+W"));
     ui.actionSelect_workspace->setStatusTip(tr("Select the workspace path"));
-	bool ok = connect (ui.actionSelect_workspace, SIGNAL(triggered()), this, SLOT(SetWorkspacePath()));
+    connect (ui.actionSelect_workspace, SIGNAL(triggered()), this, SLOT(SetWorkspacePath()));
 
 	// open workspace folder
 	ui.actionOpen_workspace_folder->setStatusTip(tr("Open the workspace folder"));
@@ -358,7 +377,7 @@ void MainWindow::setupActions()
     ui.actionAdd_a_new_project->setStatusTip(tr("Create a new project"));
 	connect (ui.actionAdd_a_new_project, SIGNAL(triggered()), this, SLOT(AddNewProject()));
 
-	connect (ui.actionPrefereces, SIGNAL(triggered()), this, SLOT(EditPreferences()));
+	connect (ui.actionPreferences, SIGNAL(triggered()), this, SLOT(EditPreferences()));
 
 	connect (ui.actionBurn_Arduino_bootloader, SIGNAL(triggered()), this, SLOT(StartBurnBootloader()));
 	
@@ -383,7 +402,7 @@ void MainWindow::setupActions()
 	connect (ui.actionSave_Workspace, SIGNAL(triggered()), this, SLOT(SaveWorkspace()));
 
 	// build complete
-	connect (buildWindow, SIGNAL(buildComplete()), this, SLOT(OnBuildComplete()));
+	//connect (buildWindow, SIGNAL(buildComplete()), this, SLOT(OnBuildComplete()));
 
 	//mouse click on workspace tree	
 	connect (ui.tree, SIGNAL(itemDoubleClicked (QTreeWidgetItem *, int)), 
@@ -412,11 +431,11 @@ void MainWindow::setupActions()
 	connect (ui.actionRemove_project, SIGNAL(triggered()), this, SLOT(RemoveProject()));
 	connect (ui.actionExport_to_sketch, SIGNAL(triggered()), this, SLOT(ExportToSketch()));
 	
-	connect (ui.actionRefresh_workspace_tree, SIGNAL(triggered()), this, SLOT(AdjustWorkspace()));
+	connect (ui.actionRefresh_workspace_tree, SIGNAL(triggered()), this, SLOT(AdjustWorkspaceTree()));
 	
 	connect (ui.actionFormat_code, SIGNAL(triggered()), tabsEditor, SLOT(FormatCode()));
 	
-	ok = connect (ui.searchText, SIGNAL(activated( const QString&)), this, SLOT(OnSearchKeyPress(const QString&)));
+    connect (ui.searchText, SIGNAL(activated( const QString&)), this, SLOT(OnSearchKeyPress(const QString&)));
 	connect (ui.btnSearch, SIGNAL(clicked()), this, SLOT(OnSearchGO()));
 	
 	// double click on build error/warning messages
@@ -471,17 +490,19 @@ void MainWindow::OpenWorkspaceFolder(void)
 
 void MainWindow::ImportLibrary(void)
 {	
-	if (workspace.GetCurrentProject() == NULL) {
+	Project * project = GetSelectedProject();
+	if (project == NULL) {
+		ErrorMessage("You need to create a new project first");
 		return;
 	}
-
-	Wizard * wizard = new Wizard();
-	bool ok = wizard->ImportLibrary();	
+	
+	Wizard * wizard = new Wizard(this);
+	bool ok = wizard->ImportLibrary(project->name);	
 	
 	if (ok) {
 		QString libName = wizard->GetLibraryName();
 		if (libName != "") {
-			workspace.ImportLibrary(workspace.GetCurrentProject(), libName);
+			workspace.ImportLibrary(project, libName);
 		}
 		SetProjectModified();
 		AdjustWorkspaceTree();
@@ -490,13 +511,18 @@ void MainWindow::ImportLibrary(void)
 	delete wizard;	
 }
 
-
 //-----------------------------------------------------------------------------
 
 void MainWindow::AddNewFileToProject(void)
 {
-	Wizard * wizard = new Wizard();
-	bool ok = wizard->NewFile();	
+	Project * project = GetSelectedProject();
+	if (project == NULL) {
+		ErrorMessage("You need to create a new project first");
+		return;
+	}
+
+	Wizard * wizard = new Wizard(this);
+	bool ok = wizard->NewFile(project);	
 	
 	if (ok) {
 		QString file = wizard->GetNewFileName();
@@ -512,11 +538,11 @@ void MainWindow::AddNewFileToProject(void)
 	
 void MainWindow::AddNewProject(void)
 {
-	Wizard * wizard = new Wizard();
+	Wizard * wizard = new Wizard(this);
 	bool ok = wizard->NewProject();
 	delete wizard;
 	if (ok) {
-		ProjectProperties * prop = new ProjectProperties();
+		ProjectProperties * prop = new ProjectProperties(this);
 		prop->Edit(workspace.GetCurrentProject());
 		delete prop;
 		SetProjectModified();
@@ -528,9 +554,9 @@ void MainWindow::AddNewProject(void)
 
 void MainWindow::ConfigureCurrentProject(void)
 {
-	ProjectProperties * prop = new ProjectProperties();
-	prop->Edit(workspace.GetCurrentProject());
-	delete prop;
+    ProjectProperties * prop = new ProjectProperties(this);
+    prop->Edit(workspace.GetCurrentProject());
+    delete prop;
 	AdjustWorkspaceTree();
 }
 
@@ -538,8 +564,8 @@ void MainWindow::ConfigureCurrentProject(void)
 
 void MainWindow::OnBuildComplete(void)
 {
-	ui.buildStatus->setCurrentIndex(builder.GetLastBuildStatus());
-	if (builder.GetLastBuildStatus() == 2) {
+	ui.buildStatus->setCurrentIndex(builder->GetLastBuildStatus());
+	if (builder->GetLastBuildStatus() == 2) {
 		int ps, ds, es;
 		float pp, dp, ep;
 		msg.GetLastSucessfullBuildInfo(ps, pp, ds, dp, es, ep);
@@ -577,6 +603,7 @@ void MainWindow::OnBuildComplete(void)
 			ui.pbEEPROMSize->setVisible(false);
 		}
 	}
+
 }
 
 //-----------------------------------------------------------------------------
@@ -593,29 +620,45 @@ void MainWindow::open()
 
 void MainWindow::BuildProject()
 {
+	if (workspace.GetCurrentProject() == NULL) {
+		ErrorMessage("No project selected!");
+		return;
+	}
 	SaveWorkspace();
 	ui.buildMessages->clear();
-	//tabsEditor->EnableAllSerialPorts(false);
-	buildWindow->Build(false);
-	//tabsEditor->EnableAllSerialPorts(true);
+	//buildWindow->Build(false);
+    builder->Build(false);
+	OnBuildComplete();
+}
+
+//-----------------------------------------------------------------------------
+
+void MainWindow::UploadProgram(void)
+{
+	if (workspace.GetCurrentProject() == NULL) {
+		ErrorMessage("No project selected!");
+		return;
+	}
+	SaveWorkspace();
+	ui.buildMessages->clear();
+	tabsEditor->EnableAllSerialPorts(false);
+	//buildWindow->Build(true);	
+    builder->Build(true);
+	OnBuildComplete();
 }
 
 //-----------------------------------------------------------------------------
 
 void MainWindow::CleanProject()
 {
+	if (workspace.GetCurrentProject() == NULL) {
+		ErrorMessage("No project selected!");
+		return;
+	}
 	ui.buildMessages->clear();
-	builder.Clean();
-	ui.buildStatus->setCurrentIndex(builder.GetLastBuildStatus());
-}
-
-//-----------------------------------------------------------------------------
-
-void MainWindow::UploadProgram()
-{
-	ui.buildMessages->clear();
-	tabsEditor->EnableAllSerialPorts(false);
-	buildWindow->Build(true);	
+    builder->Clean();
+    ui.buildStatus->setCurrentIndex(builder->GetLastBuildStatus());
+	OnBuildComplete();
 }
 
 //-----------------------------------------------------------------------------
@@ -656,7 +699,7 @@ void MainWindow::loadFile(const QString &fileName)
 
 MainWindow::~MainWindow()
 {
-	delete buildWindow;
+	//delete buildWindow;
 }
 
 //-----------------------------------------------------------------------------
@@ -677,12 +720,13 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 
 void MainWindow::SetWorkspacePath(void)
 {
-	SetWorkspace * setWorkspace = new SetWorkspace();
+	SetWorkspace * setWorkspace = new SetWorkspace(this);
 	if (setWorkspace->Select()) {
 		tabsEditor->closeAll();
 		OpenWorkspace();
 	}	
 	delete setWorkspace;	
+    config.Save();
 }
 
 //-----------------------------------------------------------------------------
@@ -698,8 +742,8 @@ void MainWindow::OpenWorkspace(void)
 
 	// open all previously open files
 	tabsEditor->closeAll();
-	for (int p=0; p < workspace.projects.size(); p++) {
-		for (int f=0; f < workspace.projects.at(p).files.size(); f++) {
+    for (unsigned int p=0; p < workspace.projects.size(); p++) {
+        for (unsigned int f=0; f < workspace.projects.at(p).files.size(); f++) {
 			QString filename = workspace.projects.at(p).files.at(f).name;
 			filename = workspace.GetFullFilePath(workspace.projects.at(p).name, filename);
 			if (workspace.projects.at(p).files.at(f).open) {
@@ -728,9 +772,9 @@ void MainWindow::AdjustWorkspaceTree(void)
 		return;
 	}
         
-	for (int pwi=0; pwi < workspace.projects.size(); pwi++) {
+    for (unsigned int pwi=0; pwi < workspace.projects.size(); pwi++) {
 		bool foundAtTree = false;
-		for (int pti=0; pti < root->childCount(); pti++) {
+        for (unsigned int pti=0; pti < root->childCount(); pti++) {
 			QTreeWidgetItem *projNode = root->child(pti);
 			if (workspace.projects.at(pwi).name == projNode->text(0)) {
 				foundAtTree = true;
@@ -755,7 +799,7 @@ void MainWindow::AdjustWorkspaceTree(void)
 	while (pti < root->childCount()) {
 		QTreeWidgetItem *projNode = root->child(pti);		
 		bool foundAtWorkspace = false;
-		for (int pwi=0; pwi < workspace.projects.size(); pwi++) {
+        for (unsigned int pwi=0; pwi < workspace.projects.size(); pwi++) {
 			QString projectName = projNode->text(0);
 			if (workspace.projects.at(pwi).name == projectName) {
 				foundAtWorkspace = true;
@@ -788,8 +832,8 @@ void MainWindow::AdjustWorkspaceTree(void)
 			//projNode->setForeground(0, QColor(140,140,140));
 		}
 	}
-	int i0 = ui.tree->children().count();
-	int i = root->childCount();
+    //int i0 = ui.tree->children().count();
+    //int i = root->childCount();
 	//int ii = root->child(0)->childCount();
 	
 }
@@ -810,11 +854,11 @@ void MainWindow::AdjustProjectFilesOnTree(int pwi, QTreeWidgetItem * projNode)
 	}
 
 	// First, check if all files in this project at workspace exist at the tree. If not, add them to the tree
-	for (int fwi=0; fwi < project->files.size(); fwi++) {
+    for (unsigned int fwi=0; fwi < project->files.size(); fwi++) {
 		bool foundAtTree = false;
 		if (project->files.at(fwi).type == ptSource) {
 			// source files
-			for (int fti=0; fti < projNode->childCount(); fti++) {
+            for (unsigned int fti=0; fti < projNode->childCount(); fti++) {
 				QTreeWidgetItem *fileNode = projNode->child(fti);
 				QString nodeName = fileNode->text(0);
 				if (project->files.at(fwi).name == nodeName) {
@@ -886,7 +930,7 @@ void MainWindow::AdjustProjectFilesOnTree(int pwi, QTreeWidgetItem * projNode)
 		QString nodeText = fileNode->text(0);
 		
 		bool foundAtWorkspace = false;
-		for (int fwi=0; fwi < project->files.size(); fwi++) {
+        for (unsigned int fwi=0; fwi < project->files.size(); fwi++) {
 			if (project->files.at(fwi).type == ptSource) {
 				continue;
 			}		
@@ -913,8 +957,8 @@ void MainWindow::SaveWorkspace(void)
 	if (tabsEditor->saveAllFiles() == false) {
 		return;
 	}
-	for (int p=0; p < workspace.projects.size(); p++) {
-		for (int f=0; f < workspace.projects.at(p).files.size(); f++) {
+    for (unsigned int p=0; p < workspace.projects.size(); p++) {
+        for (unsigned int f=0; f < workspace.projects.at(p).files.size(); f++) {
 			QString filename = workspace.projects.at(p).files.at(f).name;
 			filename = workspace.GetFullFilePath(workspace.projects.at(p).name, filename);
 			int index = tabsEditor->fileIndex(filename);
@@ -968,7 +1012,7 @@ void MainWindow::OnProjectModified(void)
 
 void MainWindow::ShowAboutWindow(void)
 {
-	About * about = new About(this);
+	About * about = new About(NULL);
 	about->Display();	
 }
 
@@ -976,18 +1020,18 @@ void MainWindow::ShowAboutWindow(void)
 
 void MainWindow::ExitSoftware(void)
 {
-	if (GetUserConfirmation("Exit MariaMole ?"))  {
-		tabsEditor->closeAll();
-		QCoreApplication::exit(0);
-	}
-		
+	//if (GetUserConfirmation("Exit MariaMole ?"))  {
+	//	tabsEditor->closeAll();
+	//	QCoreApplication::exit(0);
+	this->close();
+	//}
 }
 
 //-----------------------------------------------------------------------------
 
 void MainWindow::VisitMariaMoleWebsite(void)
 {
-	QString path = 
+    //QString path =
 	QDesktopServices::openUrl(QUrl("http://dalpix.com/mariamole"));
 }
 
@@ -995,7 +1039,7 @@ void MainWindow::VisitMariaMoleWebsite(void)
 
 void MainWindow::VisitArduinoHelp(void)
 {
-	QString path = 
+    //QString path =
 	QDesktopServices::openUrl(QUrl("http://arduino.cc/en/Reference/HomePage"));
 }
 
@@ -1003,7 +1047,7 @@ void MainWindow::VisitArduinoHelp(void)
 
 void MainWindow::ReportABug(void)
 {
-	QString path = 
+    //QString path =
 	QDesktopServices::openUrl(QUrl("http://github.com/aporto/mariamole/issues/new"));
 }
 
@@ -1140,23 +1184,32 @@ void MainWindow::ExportToSketch(void)
 void MainWindow::EditPreferences(void)
 {
 	Preferences * pref = new Preferences(NULL);
+	bool c = connect(pref, SIGNAL(apply()), this, SLOT(OnEditPreferencesApply()));
 	bool ok = pref->Edit();
 	delete pref;
 
-	if (ok) {
+	/*if (ok) {		
+	}*/
+}
+
+//-----------------------------------------------------------------------------
+
+void MainWindow::OnEditPreferencesApply(void)
+{
 		if (config.useMenuButton) {
-			ui.actionMainMenuButton->setVisible(true);	
-			ui.actionSeparator->setVisible(true);		
+			ui.actionMainMenu2->setVisible(true);	
+			ui.actionMenu3->setVisible(true);		
 			ui.menuBar->setVisible(false);	
 		} else {
-			ui.actionMainMenuButton->setVisible(false);	
-			ui.actionSeparator->setVisible(false);		
+			ui.actionMainMenu2->setVisible(false);	
+			ui.actionMenu3->setVisible(false);		
 			ui.menuBar->setVisible(true);	
 		}
 
 		tabsEditor->ConfigureAllTabs();
+
+		config.Save();
 	}
-}
 
 //-----------------------------------------------------------------------------
 
@@ -1198,13 +1251,23 @@ void MainWindow::OnSearchGO(void)
 
 void MainWindow::closeEvent ( QCloseEvent * event )
 {  
-	event->ignore();	    
-	if (QMessageBox::Yes == QMessageBox::question(NULL, "Close Confirmation?",
-							"Are you sure you want to exit?", 
-							QMessageBox::Yes|QMessageBox::No))
-	{
-	event->accept();
-	}
+    event->ignore();
+
+    if(tabsEditor->allSaved() == false) {
+        //if (QMessageBox::Yes == QMessageBox::question(NULL, "Close Confirmation?",
+        //                                              "Are you sure you want to exit?",
+        //                                              QMessageBox::Yes|QMessageBox::No))
+        if (QMessageBox::Yes == QMessageBox::question(NULL, "Close Confirmation?",
+                                                      "There are some unsaved files! Do you really want to exit before saving them? :D",
+                                                      QMessageBox::Yes|QMessageBox::No))
+        {
+					  tabsEditor->closeAll();
+            event->accept();
+            QCoreApplication::exit(0);
+        }
+    }
+    else
+        event->accept();
 } 
 
 //-----------------------------------------------------------------------------
@@ -1217,7 +1280,44 @@ void MainWindow::StartBurnBootloader(void)
 
 	if (select->Configure()) {
 		ui.buildMessages->clear();
-		buildWindow->BurnBootloader();			
+		//buildWindow->BurnBootloader();			
 	}
 	delete select;	
 }
+
+//-----------------------------------------------------------------------------
+
+// Get the currently selected project on tree
+Project * MainWindow::GetSelectedProject(void)
+{
+	if (ui.tree->hasFocus()) {
+		if (ui.tree->selectedItems().count() != 1) {
+			return NULL;
+		}
+	
+		QTreeWidgetItem * item = ui.tree->selectedItems().at(0);
+		if (item->data(0,255) != WorskspaceTree::Project) {
+			return NULL;
+		}
+		return workspace.FindProject(item->text(0));
+	}
+	return workspace.GetCurrentProject();
+}
+
+//-----------------------------------------------------------------------------
+
+/*
+
+QWidget {
+	background-color: rgb(22, 30, 32);
+	border-left: 1px solid rgb(55, 60,70);
+}
+
+QImage {
+	border: 0px solid rgb(55, 60,70);
+}
+
+QLabel {
+	border: 0px solid rgb(55, 60,70);
+}
+*/

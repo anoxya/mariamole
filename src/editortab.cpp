@@ -4,7 +4,7 @@ EditorTab::EditorTab(QWidget *parent)
 	: QTabWidget(parent)
 {
 	this->setTabsClosable(true);
-    this->setTabShape(Triangular);
+	this->setTabShape(Triangular);
 
 	LoadStyleSheet(this, "style_code_tab.css");
 
@@ -17,14 +17,51 @@ EditorTab::EditorTab(QWidget *parent)
 	connect(action, SIGNAL(triggered()), this, SLOT(closeThis()));
 	action = context->addAction("Close all but this");
 	connect(action, SIGNAL(triggered()), this, SLOT(closeAllButThis()));
-	//projectContext->addAction(action);
-	//projectContext->addSeparator();
+
+	tabBar()->installEventFilter( this );
+
+    setAttribute(Qt::WA_DeleteOnClose);
 }
 
 EditorTab::~EditorTab()
 {
+    closeAll();
+}
 
+bool EditorTab::eventFilter(QObject *obj, QEvent *event)
+{
+    if (obj != tabBar()) {
+	    return QObject::eventFilter(obj, event);
+	}
+     
+    if (event->type() != QEvent::MouseButtonPress) {
+		return QObject::eventFilter(obj, event);
+	}
+     
+    // compute the tab number
+    QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
+    QPoint position = mouseEvent->pos();
+    int c = tabBar()->count();
+    int clickedItem = -1;
+     
+    for (int i=0; i<c; i++) {
+	    if ( tabBar()->tabRect(i).contains( position ) ) {
+		    clickedItem = i;
+			break;
+		}
+    }     
+    if (clickedItem == -1) {
+		return QObject::eventFilter(obj, event);
+	}
 
+    if (mouseEvent->button() == Qt::RightButton) {
+		this->setCurrentIndex(clickedItem);     
+		QPoint point = mapToGlobal(position);
+		context->popup(point);
+		return true;
+	}
+
+	return QObject::eventFilter(obj, event);
 }
 
 MM::TabType EditorTab::tabType(int index)
@@ -33,7 +70,7 @@ MM::TabType EditorTab::tabType(int index)
 		return MM::undefinedTab;
 	}
 
-	QWidget * w = widget(index);
+	//QWidget * w = widget(index);
 	
 	if (widget(index)->windowIconText() == "editor") {
 		return MM::codeTab;
@@ -47,7 +84,7 @@ int EditorTab::fileIndex(QString filename)
 // if no tab holds this file, returns -1
 {
 	for (int i=0;  i < count(); i++) {
-		QWidget * w = widget(i);
+		//QWidget * w = widget(i);
 		// Check if the widget is a code editor
 		if (tabType(i) == MM::codeTab) {		
 			Editor * editor = (Editor *)(widget(i));
@@ -64,7 +101,7 @@ int EditorTab::portIndex(QString port)
 // returns the tab index that holds the requested serila port
 {
 	for (int i=0;  i < count(); i++) {
-		QWidget * w = widget(i);
+        //QWidget * w = widget(i); //not used
 		// Check if the widget is a code editor
 		if (tabType(i) == MM::serialTab) {		
 			SerialMonitor * monitor = (SerialMonitor *)(widget(i));
@@ -79,11 +116,18 @@ int EditorTab::portIndex(QString port)
 
 void EditorTab::EnableAllSerialPorts(bool enable)
 {
+	QString currentPort = "None";
+	if (workspace.GetCurrentProject() != NULL) {
+		currentPort = workspace.GetCurrentProject()->serialPort;
+	}
 	for (int i=0; i < count(); i++) {
 		if (tabType(i) == MM::serialTab) {		
 			SerialMonitor * serial = (SerialMonitor *)widget(i);
 			if (enable) {
 				serial->OpenPort();
+				if (serial->GetPort() == currentPort) {
+					setCurrentIndex(i);
+				}
 			} else {
 				serial->ClosePort();				
 			}
@@ -125,13 +169,11 @@ bool EditorTab::openFile(QString filename, int highlightLine)
 		textEdit->Open(filename);
 		
 		connect(textEdit, SIGNAL(textChanged()), this, SLOT(onEditorTextChanged()));
-	
+		connect(textEdit, SIGNAL(ctrlUPressed()), this, SLOT(onCtrlUPressed()));
+		
 		addTab(textEdit, QFileInfo(filename).fileName());
 		setCurrentIndex(count() - 1);		
 
-		bool ok = connect(textEdit, SIGNAL(customContextMenuRequested(const QPoint &)),
-					this,SLOT(ShowEditorMenu(const QPoint )));
-		textEdit->setContextMenuPolicy(Qt::CustomContextMenu);
 
 		QApplication::restoreOverrideCursor();
 	}
@@ -148,44 +190,78 @@ bool EditorTab::openFile(QString filename, int highlightLine)
 
 void EditorTab::onEditorTextChanged(void)
 {
+	int index = currentIndex();
+	Editor * editor = (Editor *)widget(index);
+	
+	setTabText(index, "*" + QFileInfo(editor->GetFileName()).fileName());
 	emit codeChanged();
 }
 
 void EditorTab::closeTab(int index)
 {
-	if (tabType(index) == MM::codeTab) {
-		Editor * editor = (Editor *)widget(index);
-		if (editor->isModified()) {
-			if (GetUserConfirmation("This file is being closed, but has unsaved changes. Do you want to save it?\n" + editor->GetFileName())) {
-			/*QMessageBox::StandardButton reply;
-			reply = QMessageBox::question(this, "File modified", "File was modified. Do you want to save it?\n" + editor->GetFileName(),
-                                QMessageBox::Yes|QMessageBox::No);
-			if (reply == QMessageBox::Yes) {*/
-				saveFile(index);
-			}
-		}
-	}
-	
+    switch(tabType(index)) {
+
+        case MM::codeTab:
+        {
+            Editor * ed = (Editor*)widget(index);
+            if (ed->isModified()) {
+                if (GetUserConfirmation("This file is being closed, but has unsaved changes. Do you want to save it?\n" + ed->GetFileName()))
+                  saveFile(index);
+
+            }
+        }
+            break;
+
+        case MM::serialTab:
+        {
+            SerialMonitor * serial = (SerialMonitor*)widget(index);
+            serial->ClosePort();
+			QThread::msleep(200);
+        }
+            break;
+
+    }
+
 	// removeTab doesnt delete the widget
 	QWidget * w = widget(index);
 	this->removeTab(index);
-	delete w;
-
-	//delete widget(index);
-   // cout << "Index to remove == "  << index << endl;
-    //QWidget* tabItem = this->widget(index);
-    // Removes the tab at position index from this stack of widgets.
-    // The page widget itself is not deleted.
-    //this->removeTab(index);
-    //delete this->widget(index);
-    //delete tabItem; //It does not work, still do not know why...
+#ifndef Q_OS_LINUX    
+	delete w; // For some reason, this is causing a segfault on Linux. Data can't be freed for while :(
+#endif
 }
+
+//check if all files are saved
+bool EditorTab::allSaved(void)
+{
+    bool saved = true;
+
+    for (int i = 0; i < count(); i++) {
+        if (tabType(i) == MM::codeTab) {
+            Editor * editor = (Editor *)widget(i);
+            if(editor->isModified()) {
+                saved = false;
+                break; //if at least one file is not saved, why continue?
+            }
+        }
+    }
+    return saved;
+}
+
+
 
 bool EditorTab::saveFile(int index) 
 {
 	Editor * editor = (Editor *)widget(index);
-	return editor->Save();
 	
+	QString fileNamemod = tabText(index);
+	QChar asterisk = tabText(index).at(0);
+	
+	if(asterisk == '*' && editor->isModified()) {
+		fileNamemod.remove(0, 1);
+		this->setTabText(index, fileNamemod);
+  }
+  
+	return editor->Save();
 }
 
 bool EditorTab::saveAllFiles(void)
@@ -276,4 +352,10 @@ void EditorTab::closeAllButThis(void)
 	while (count() > 1) {
 		closeTab(1);
 	}
+}
+
+
+void EditorTab::onCtrlUPressed(void)
+{
+	emit uploadCode();
 }

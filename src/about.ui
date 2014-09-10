@@ -166,7 +166,7 @@ QScrollBar::handle {
     </property>
     <item>
      <property name="text">
-      <string>Scintilla code, Linux port, Mac port</string>
+      <string>Some code, Scintilla code, Linux port, Mac port</string>
      </property>
     </item>
    </item>
@@ -258,7 +258,7 @@ QScrollBar::handle {
     <string>http://dalpix.com/mariamole</string>
    </property>
   </widget>
-  <widget class="QLabel" name="label_7">
+  <widget class="QLabel" name="lblVersion">
    <property name="geometry">
     <rect>
      <x>240</x>

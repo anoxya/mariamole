@@ -5,6 +5,7 @@
 #include <qstring.h>
 #include <qsettings.h>
 #include <QDir>
+#include <QColor>
 #include <QtXml/QtXml>
 #include <QtXml/QDomNode>
 
@@ -46,6 +47,20 @@ struct BuildDef {
 	QString coreLibs;	
 };
 
+struct TextStyle {
+	QString fontName;
+	int fontSize;
+	QColor foreColor;
+	QColor backColor;
+	bool italic;
+	bool underline;
+	bool bold;
+};
+
+struct ColorTheme {
+	QString name;
+	std::map <QString, TextStyle> styles;
+};
 
 //-----------------------------------------------------------------------------
 
@@ -60,28 +75,40 @@ public:
 	QString DecodeMacros(QString inputText, Project const * const project);
 	QString LocateFileUsingSearchPaths(QString filename, QString searchPaths, bool isDir);
 	QString DecodeLibraryPath(QString libPath);
+	QString ConfigPath(void) { return configPath; }
+	void GetThemeStyle(QString themeName, QString styleName, TextStyle &style);
 
+	bool highlightBraces;
 	bool useMenuButton;
 	bool hideCompilerWarnings;
 	QString workspace;
 	QString includePaths;
 	QString libPaths;
 	QString libs;
+  //QString arduinoCoreOpt;
+	QString arduinoInstall;
 	QString extraArduinoLibsSearchPaths;
+	QString avrPath;
+	QString themeName;
 	//QString coreLibsPath;
 	unsigned int uploadTimeout;
 	map <QString, BoardDef> boards;
 	map <QString, ProgrammerDef> programmers;
 	map <QString, BuildDef> builds;
+	map <QString, ColorTheme> colorThemes;
 
 	QString editorFontName;
+   QString editorColorName;
 	unsigned int editorFontSize;
 	
 private:	
 	QString appPath;
+	QString configPath;
+	QString configUserPath;
 	vector <QString> macros;
 
 	int LoadHardwareDefinitions(void);
+	int LoadStyles(void);
 	QString ReadXMLNode(QDomNode xml, QString attribute, QString defaultValue);
 };
 

@@ -14,14 +14,14 @@ bool GetUserConfirmation(QString msg)
 void ErrorMessage(QString msg) {
 	QMessageBox mb;
 	mb.setStyleSheet("");
-	QMessageBox::StandardButton reply;
+	//QMessageBox::StandardButton reply;
 	mb.warning(NULL, "MariaMole", msg);
 }
 
 void LoadStyleSheet(QWidget * widget, QString file)
 {
 	// Load stylesheet
-	QString cssFileName =  qApp->applicationDirPath() + "/config/" + file;
+	QString cssFileName =  qApp->applicationDirPath() + "/styles/" + file;
 	QFile cssFile(cssFileName);
 	cssFile.open(QFile::ReadOnly | QFile::Text);
     QTextStream css(&cssFile);

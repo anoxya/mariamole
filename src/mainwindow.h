@@ -12,7 +12,7 @@
 
 #include "ui_mainwindow.h"
 
-#include "buildwindow.h"
+//#include "buildwindow.h"
 #include "config.h"
 #include "workspace.h"
 #include "setworkspace.h"
@@ -25,11 +25,17 @@
 #include "preferences.h"
 #include "burnbootloader.h"
 
+#include "launcher.h"
+
 //-----------------------------------------------------------------------------
 
 namespace WorskspaceTree {
 	enum Types {Workspace, Project,ExternalTree, ExternalFile, File};
-};
+}
+
+namespace Ui {
+class MainWindow;
+}
 
 class MainWindow : public QMainWindow
 {
@@ -77,30 +83,33 @@ public slots:
 	void ExportToSketch(void);
 	void EditPreferences(void);
 	void StartBurnBootloader(void);
-
+	void AdjustWorkspaceTree(void);
 	void OnSearchKeyPress(const QString&);
 	void OnSearchGO(void);
+	void OnEditPreferencesApply(void);
 	
 protected:
 	void resizeEvent(QResizeEvent *event);
 
 private:
 	Ui::MainWindowClass ui;
-	BuildWindow * buildWindow;
+	//BuildWindow * buildWindow;
 	Wizard * wizard;
 	SetWorkspace * setWorkspace;
 	QMenu * projectContext, * fileContext, * wsContext;
 	QMenu * mainMenu;
 	
+    Builder * builder;
+
 	EditorTab *tabsEditor;
 
 	void CreateMainMenuContext(void);
 	void CreateTreeContextMenu(void);
-	void OpenWorkspace(void);
-	void AdjustWorkspaceTree(void);
+	void OpenWorkspace(void);	
     void AdjustProjectFilesOnTree(int pwi, QTreeWidgetItem *);
     void setupActions(void);
 	void SetProjectModified(void);
+	Project * GetSelectedProject(void);
 };
 
 #endif // MAINWINDOW_H

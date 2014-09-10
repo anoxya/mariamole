@@ -1,16 +1,26 @@
 #ifndef EDITOR_H
 #define EDITOR_H
 
-//#include <QsciScintilla>
+
 #include <qwidget.h>
-#include <Qsci/qsciscintilla.h>
-#include <Qsci/qscilexercpp.h>
-#include <Qsci/qsciapis.h>
 #include <QFileInfo>
+#include <QLabel>
 #include <QTextStream>
 #include <QApplication>
 #include <QColor>
+#include <QKeyEvent>
+#include <QMenu>
 #include <QDateTime>
+#include <QDesktopServices>
+#include <QSpacerItem>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QStyle>
+//QScintilla
+#include <Qsci/qsciscintilla.h>
+#include <Qsci/qscilexercpp.h>
+#include <Qsci/qsciapis.h>
+
 
 #include "mm_utils.h"
 #include "config.h"
@@ -21,7 +31,7 @@ class Editor : public QsciScintilla
 
 public:
 	Editor(QWidget *parent);
-	~Editor();
+    ~Editor();
 	QString GetFileName(void);
 	void setEditorStyle (void);
 	void CodeBeautifier(void);
@@ -30,20 +40,38 @@ public:
 	void Configure(void);
 
 public slots:
-	void onCursorPositionChanged(int line, int index);
+    void ShowEditorMenu(const QPoint point);
+	void HelpWithThis(void);
+	void MenuUndo(void);
+	void MenuRedo(void);
+	void MenuCut(void);
+	void MenuCopy(void);
+	void MenuPaste(void);
+	//void MenuDelete(void);
+	void MenuSelectAll(void);
+	void onCursorPositionChanged (int line, int index); 
+
+signals:
+	void ctrlUPressed(void);
 
 protected: 
 	void focusInEvent ( QFocusEvent * event );
 	void mousePressEvent ( QMouseEvent * event );
+	void keyPressEvent(QKeyEvent * event);
 	
 private:
 	QsciAPIs *api;
     QsciLexerCPP *lexer;
 	QString file;
-	QDateTime lastModifiedTime;
-	
+    QDateTime lastModifiedTime;
+	QMenu * context;
+	QAction * actionHelpWithThis;
+	QLabel * lblCursorPosition;
+	QColor caretLineBackColor;
 	void SetFileName(QString filename);
-	void setLexerStyle (int style, QColor foreground, QColor background, bool bold = false, bool italic = false, bool underline = false);
+	void setLexerStyle(int styleId, QString styleName);
+	//void setLexerStyle (int style, QColor foreground, QColor background, bool bold = false, bool italic = false, bool underline = false);
+	QString GetRefenceForWordUnderCursor(void);
 };
 
 #endif // EDITOR_H

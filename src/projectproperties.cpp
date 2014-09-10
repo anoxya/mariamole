@@ -14,7 +14,9 @@ ProjectProperties::ProjectProperties(QWidget *parent)
 	connect(ui.menuList, SIGNAL(currentItemChanged( QListWidgetItem * , QListWidgetItem * )), 
 		this, SLOT(PageChange( QListWidgetItem * , QListWidgetItem * )));
 
-	
+    //connect(ui.cbSerialPort, SIGNAL(activated(int)), this, SLOT(OnSerialPortSelected(int)));
+
+	//bool c = connect(ui.cbSerialPort, SIGNAL(focusInEvent(QFocusEvent *)), this, SLOT(OnSerialPortGetFocus(QFocusEvent *)));
 }
 
 //-----------------------------------------------------------------------------
@@ -83,7 +85,7 @@ bool ProjectProperties::Edit(Project * project)
 	// set board names combobox
 	ui.cbBoardName->clear();
 	map <QString, BoardDef>::iterator board;
-	for (board = config.boards.begin(); board != config.boards.end() ;board++) {
+    for (board = config.boards.begin(); board != config.boards.end(); board++) {
 		ui.cbBoardName->addItem(board->first);
 		if (board->first == project->boardName) {
 			ui.cbBoardName->setCurrentIndex(ui.cbBoardName->count()-1);
@@ -95,31 +97,23 @@ bool ProjectProperties::Edit(Project * project)
 		}
 	}	
 
-	// get list of serial ports
-	// to do: use QSerialPort
-
-	ui.cbSerialPort->clear();
-	ui.cbSerialPort->addItem("N/A");
-
-	QSerialPortInfo serial;
-	for (int i=0; i < serial.availablePorts().count();i++) {
-		ui.cbSerialPort->addItem(serial.availablePorts().at(i).portName());
-	}
-	
-	/*ui.cbSerialPort->addItem("COM 1");
-	ui.cbSerialPort->addItem("COM 2");
-	ui.cbSerialPort->addItem("COM 3");
-	ui.cbSerialPort->addItem("COM 4");
-	ui.cbSerialPort->addItem("COM 5");
-	ui.cbSerialPort->addItem("COM 6");
-	*/
+    // get list of serial ports
+	ui.cbSerialPort->clear();	
+    ui.cbSerialPort->addItem("N/A");
 	ui.cbSerialPort->setCurrentIndex(0);
+
+	if (project->serialPort != "") {
+		ui.cbSerialPort->addItem(project->serialPort);
+		ui.cbSerialPort->setCurrentIndex(1);
+	}
+    //OnSerialPortSelected(0);
+	/*ui.cbSerialPort->setCurrentIndex(0);
 	for (int i=0; i < ui.cbSerialPort->count(); i++) {
 		if (project->serialPort == ui.cbSerialPort->itemText(i)) {
 			ui.cbSerialPort->setCurrentIndex(i);
 		}
-	}
-
+    }
+	*/
 	// populate programmers list
 	ui.cbExternalProgrammer->clear();
 	map <QString, ProgrammerDef>::iterator prog;
@@ -166,3 +160,8 @@ bool ProjectProperties::Edit(Project * project)
 }
 
 //-----------------------------------------------------------------------------
+
+//void ProjectProperties::OnSerialPortSelected(int index)
+//void ProjectProperties::OnSerialPortGetFocus(QFocusEvent * e)
+
+

@@ -17,7 +17,7 @@ Wizard::Wizard(QWidget *parent)
 	connect(ui.btnCancel, SIGNAL(clicked()), this, SLOT(btnCancelClicked()));	
 
 	connect(ui.rbEmptyProject, SIGNAL(clicked()), this, SLOT(rbEmptyProject()));	
-	connect(ui.rbImportSketch, SIGNAL(clicked()), this, SLOT(rbEmptyProject()));	
+    connect(ui.rbImportSketch, SIGNAL(clicked()), this, SLOT(rbEmptyProject()));
 	connect(ui.rbImportExample, SIGNAL(clicked()), this, SLOT(rbImportExample()));	
 
 	connect(ui.listLibs, SIGNAL(itemClicked (QListWidgetItem *)), this, SLOT(listLibsClicked(QListWidgetItem *)));		
@@ -72,9 +72,13 @@ void Wizard::btnNextClicked(void)
 				if (selection.size() != 0) {
 					ui.projectName->setText(selection.at(0)->text(0));
 				}
-			}
-			if (ui.projectName->text() == "") {
-				ui.projectName->setText("New project");
+			} else if (ui.rbImportSketch->isChecked()) {
+				QFileInfo finfo (ui.ebSketchName->text());
+				ui.projectName->setText(finfo.baseName());
+			} else { // new empty project 
+				if (ui.projectName->text() == "") {
+					ui.projectName->setText("New project");
+				}
 			}
 		}
 	} else if (ui.stackedWidget->currentIndex() == 4) {
@@ -85,8 +89,13 @@ void Wizard::btnNextClicked(void)
 			ui.btnFinish->setEnabled(true);
 			ui.btnNext->setEnabled(false);
 			ui.btnPrevious->setEnabled(true);
-			if (ui.projectName->text() == "") {
-				ui.projectName->setText("New project");
+			if (ui.rbImportSketch->isChecked()) {
+				QFileInfo finfo (ui.ebSketchName->text());
+				ui.projectName->setText(finfo.baseName());
+			} else { // new empty project 
+				if (ui.projectName->text() == "") {
+					ui.projectName->setText("New project");
+				}
 			}
 		}
 	}
@@ -155,7 +164,7 @@ void Wizard::btnFinishClicked(void)
 		if (ui.ebNewFile->text().trimmed().at(0) == '.') {
 			return;
 		}
-		newFile = config.workspace + "/" + workspace.GetCurrentProject()->name + "/source/" + ui.ebNewFile->text();
+		newFile = config.workspace + "/" + currentProject->name + "/source/" + ui.ebNewFile->text();
 		if (ui.rbCppFile->isChecked() ) {
 			newFile += ".cpp";
 		} else if (ui.rbCFile->isChecked() ) {
@@ -163,7 +172,7 @@ void Wizard::btnFinishClicked(void)
 		} else {
 			newFile += ".h";
 		}
-		if (workspace.AddNewFile(newFile)) {
+		if (workspace.AddNewFile(currentProject->name, newFile)) {
 			ok = true;
 			close();			
 		}
@@ -200,9 +209,10 @@ bool Wizard::Display(void)
 
 //-----------------------------------------------------------------------------
 
-bool Wizard::NewFile(void)
+bool Wizard::NewFile(Project * project)
 {
-	ui.lblTitle->setText("Create a new file:");
+	currentProject = project;
+	ui.lblTitle->setText("Add a new file to '" + project->name +"':");
 	
 	ui.stackedWidget->setCurrentIndex(5);
 	ui.btnCancel->setEnabled(true);
@@ -257,14 +267,14 @@ bool Wizard::NewProject(void)
 
 //-----------------------------------------------------------------------------
 
-bool Wizard::ImportLibrary(void)
+bool Wizard::ImportLibrary(QString projectName)
 {
 	ui.stackedWidget->setCurrentIndex(1);
 	ui.btnCancel->setEnabled(true);
 	ui.btnFinish->setEnabled(false);
 	ui.btnPrevious->setEnabled(false);
 	ui.btnNext->setEnabled(false);
-	ui.lblTitle->setText("Import library:");
+	ui.lblTitle->setText("Import library to '" + projectName + "':");
 
 	PopulateLibrariesList();
 
@@ -304,12 +314,14 @@ void Wizard::PopulateLibrariesList(void)
 		QDir dir(paths[i]);                            
 		QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot|QDir::AllEntries); 
 		for (int f=0; f < files.size(); f++) {			
-			if (files.at(f).isDir()) {
+            if (files.at(f).isDir()) {
 				QString dirName = QFileInfo(files.at(f).absoluteFilePath()).fileName();
+                qDebug() << dirName;
 				ui.listLibs->addItem(dirName);
 			}
 		}
 	}	
+	ui.listLibs->sortItems();
 }
 
 //-----------------------------------------------------------------------------
@@ -397,7 +409,7 @@ QString Wizard::GetSelectedExamplePath(void)
 	}
 
 	if (selected->text(0) == "arduino") {
-		path = qApp->applicationDirPath() + "/arduino/arduino/examples/" + path;
+		path = config.arduinoInstall + "/examples/" + path;
 		path = path + "/" + QFileInfo(path).fileName() + ".ino";
 	} else {
 		path = selected->text(0) + "/examples/" + path;// + "/" + path + ".ino";
@@ -408,8 +420,6 @@ QString Wizard::GetSelectedExamplePath(void)
 		}
 	}
 
-	//path = qApp->applicationDirPath() + "/arduino/" + path + "/" + name + ".ino";
-
 	return path;
 }
 
@@ -417,24 +427,21 @@ QString Wizard::GetSelectedExamplePath(void)
 
 void Wizard::ListExamples(QStringList &examples)
 {
-	QString allPaths = qApp->applicationDirPath() + "/arduino/arduino";
+	QString allPaths = config.arduinoInstall;//  + "/examples";
 	allPaths +=";" + config.extraArduinoLibsSearchPaths;
 	
 	QStringList paths;
 	paths = allPaths.split(";");
 
-	//paths.append("C:/docs/Programas/lixo/original/");
-	//paths.append("C:/docs/Programas/lixo/libraries/");
-	//paths.append("C:/docs/lixo2/libraries");
 	examples.clear();	
 	for (int i=0; i < paths.size(); i++) {		
-		GetExamplesDirectoriesRecursivelly(config.DecodeMacros(paths[i], NULL), examples);				
+        GetExamplesDirectoriesRecursivelly(0, config.DecodeMacros(paths[i], NULL), examples);
 	}
 }
 
 //-----------------------------------------------------------------------------
 
-void Wizard::GetExamplesDirectoriesRecursivelly(QString path, QStringList &examples)
+void Wizard::GetExamplesDirectoriesRecursivelly(int level, QString path, QStringList &examples)
 {
 	QDir dir(path);    
 	QFileInfoList files = dir.entryInfoList(QDir::NoDotAndDotDot|QDir::AllEntries); 
@@ -448,7 +455,9 @@ void Wizard::GetExamplesDirectoriesRecursivelly(QString path, QStringList &examp
 				baseName = QFileInfo(baseName).fileName();
 				GetExamplesNamesRecursivelly(baseName, currentPath, examples);
 			} else {
-				GetExamplesDirectoriesRecursivelly(path + "/" + dirName, examples);
+                if (level < 2) { // limit the maximum depth for seaching on directories tree. Arduino examples shall be up to the 2nd level. Any 'examples' folder found beyond that is something else, and shall be ignored
+                    GetExamplesDirectoriesRecursivelly(level + 1, path + "/" + dirName, examples);
+                }
 			}
 		}
 	}

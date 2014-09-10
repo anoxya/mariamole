@@ -47,7 +47,7 @@
             <rect>
              <x>20</x>
              <y>70</y>
-             <width>111</width>
+             <width>291</width>
              <height>16</height>
             </rect>
            </property>
@@ -70,12 +70,12 @@
             <rect>
              <x>40</x>
              <y>230</y>
-             <width>231</width>
+             <width>441</width>
              <height>20</height>
             </rect>
            </property>
            <property name="text">
-            <string>No. Upload program viaUSB cable</string>
+            <string>No. Upload program via USB cable</string>
            </property>
           </widget>
           <widget class="QRadioButton" name="rbYesExternalProgrammer">
@@ -83,7 +83,7 @@
             <rect>
              <x>40</x>
              <y>260</y>
-             <width>281</width>
+             <width>441</width>
              <height>20</height>
             </rect>
            </property>
@@ -96,15 +96,15 @@
             <rect>
              <x>20</x>
              <y>140</y>
-             <width>71</width>
+             <width>351</width>
              <height>16</height>
             </rect>
            </property>
            <property name="text">
-            <string>Serial port</string>
+            <string>Serial port (Select any port to refresh this list)</string>
            </property>
           </widget>
-          <widget class="QComboBox" name="cbSerialPort">
+          <widget class="QSerialSelector" name="cbSerialPort">
            <property name="geometry">
             <rect>
              <x>22</x>
@@ -119,7 +119,7 @@
             <rect>
              <x>20</x>
              <y>210</y>
-             <width>181</width>
+             <width>411</width>
              <height>16</height>
             </rect>
            </property>
@@ -200,6 +200,13 @@
   </layout>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
+ <customwidgets>
+  <customwidget>
+   <class>QSerialSelector</class>
+   <extends>QComboBox</extends>
+   <header location="global">qserialselector.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

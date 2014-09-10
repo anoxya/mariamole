@@ -2,7 +2,7 @@
 #define PROJECTPROPERTIES_H
 
 #include <QDialog>
-#include <QtSerialPort/QSerialPortInfo>
+//#include <QtSerialPort/QSerialPortInfo>
 
 #include "ui_projectproperties.h"
 
@@ -23,6 +23,8 @@ public:
 		void Cancel(void);
 		void DisableProgrammer(void);
 		void EnableProgrammer(void);
+		//void OnSerialPortSelected(int index);
+		//void OnSerialPortGetFocus(QFocusEvent * e);
 		
 
 private:

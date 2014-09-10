@@ -15,14 +15,14 @@ Config::Config(void)
 
 Config::~Config(void)
 {
-	Save();
+	//Save();
 }
 
 //-----------------------------------------------------------------------------
 
 int Config::Load(void)
 {
-	appPath = qApp->applicationDirPath(); // "C:/Users/aporto/Documents/GitHub/mariamole/build";
+	appPath = qApp->applicationDirPath();
 
 	QSettings settings(QSettings::IniFormat, QSettings::UserScope, 
 		"MariaMole", "config");
@@ -30,25 +30,66 @@ int Config::Load(void)
 	settings.beginGroup("main");
 	workspace = settings.value("workspace", "").toString();
 	useMenuButton= settings.value("useMenuButton", "1").toBool();
-    settings.endGroup();
+	settings.endGroup();
 
 	settings.beginGroup("build");
 	includePaths = settings.value("includePaths", "").toString();
 	libPaths = settings.value("libPaths", "").toString();
 	libs = settings.value("libs", "").toString();
-	//coreLibsPath = settings.value("coreLibsPath", "").toString();
-	uploadTimeout = settings.value("uploadTimeout", 30).toInt();	
-    settings.endGroup();
+	
+  uploadTimeout = settings.value("uploadTimeout", 30).toInt();
+
+#ifdef Q_OS_WIN
+	arduinoInstall = settings.value("arduinoInstall", appPath +"/arduino").toString();
+#endif
+
+#ifdef Q_OS_LINUX	
+	arduinoInstall = settings.value("arduinoInstall", "/usr/share/arduino").toString();
+#endif
+
+#ifdef Q_OS_MAC
+	arduinoInstall = settings.value("arduinoInstall", appPath).toString();
+	//arduinoInstall = settings.value("arduinoInstall", "").toString();
+	//arduinoInstall = arduinoInstall.length() > 0
+	//				? arduinoInstall
+	//				: qApp->applicationDirPath();
+#endif		
+
+  qDebug() << "arduinoInstall" << arduinoInstall;
+
+
+#ifdef Q_OS_WIN	
+  configPath = appPath;
+  configUserPath = QDir::homePath() + "/MariaMole";    
+#endif
+
+#ifdef Q_OS_LINUX
+  configUserPath = QDir::homePath() + "/.mariamole";
+  configPath = "/etc/mariamole";    
+#endif
+
+#ifdef Q_OS_MAC
+  configUserPath = QDir::homePath() + "/Library/mariamole";
+  configPath = "/etc/mariamole";    
+#endif
+
+  avrPath = settings.value("avrPath", arduinoInstall + "/hardware/tools/avr/bin").toString();
+	//avrPath = arduinoInstall + "/hardware/tools/avr/bin";
+  //qDebug() << "avrPath" << avrPath;
+  settings.endGroup();
 	
 	settings.beginGroup("arduino");
 	extraArduinoLibsSearchPaths = settings.value("extraArduinoLibsSearchPaths", "").toString();
 	settings.endGroup();
 	
 	settings.beginGroup("ui");
-	editorFontName = settings.value("editorFontName", "Consolas").toString();
-	editorFontSize = settings.value("editorFontSize", "12").toInt();
-	settings.endGroup();
+	themeName  = settings.value("themeName", "MariaMole").toString();	
+	editorFontName  = settings.value("editorFontName", "Consolas").toString();
+	editorFontSize  = settings.value("editorFontSize", "12").toInt();
+	editorColorName = settings.value("editorColorName", "#182022").toString();
+	highlightBraces = settings.value("highlightBraces", "1").toBool();
 
+	settings.endGroup();
 
 	settings.beginGroup("compiler");
 	hideCompilerWarnings = settings.value("hideCompilerWarnings", "0").toBool();
@@ -59,15 +100,26 @@ int Config::Load(void)
 		return res;
 	}
 
-	return 0;
+	res = LoadStyles();
+
+	return res;
 }
 
 //-----------------------------------------------------------------------------
 
 int Config::LoadHardwareDefinitions(void)
 {
-	QString filepath = QDir::cleanPath(appPath + QDir::separator() + "config" + 
-			QDir::separator() + "hardware.xml");
+	QString filepath = configUserPath + "config/hardware.xml";
+	
+	if(!QFile::exists(filepath)) {
+		filepath = configPath + "/config/hardware.xml";
+	}
+	if(!QFile::exists(filepath)) {
+		filepath = appPath + "/config/hardware.xml";
+	}
+
+	qDebug() << "Loading " << filepath;
+
 	QFile file(filepath);
 	
 	if (file.open(QIODevice::ReadOnly) == false) {
@@ -79,7 +131,9 @@ int Config::LoadHardwareDefinitions(void)
 		file.close();
 		return 102;
 	}
+
 	file.close();
+
 	QDomElement docElem = doc.documentElement();
 	QDomNode xmlHw = docElem.firstChild();
 	
@@ -150,6 +204,150 @@ int Config::LoadHardwareDefinitions(void)
 
 //-----------------------------------------------------------------------------
 
+void Config::GetThemeStyle(QString themeName, QString styleName, TextStyle &style)
+{
+	map <QString, ColorTheme>::iterator theme;
+	map <QString, ColorTheme>::iterator themeDef;
+	theme = colorThemes.find(themeName);
+	
+	themeDef = colorThemes.find(themeName);
+	if (themeDef == colorThemes.end()) {
+		return;
+	}
+	if (themeDef->second.styles.find("DEFAULT") == themeDef->second.styles.end()) {
+		return;
+	}
+	TextStyle defStyle = themeDef->second.styles.find("DEFAULT")->second;
+	if (defStyle.fontName == "") {		
+		style.fontName = config.editorFontName;
+	} else {
+		style.fontName = defStyle.fontName;
+	}
+	if (defStyle.fontSize < 1) {		
+		style.fontSize = config.editorFontSize;
+	} else {
+		style.fontSize = defStyle.fontSize;
+	}
+	style.backColor = defStyle.backColor;//QColor (120, 120, 120);
+	style.foreColor = defStyle.foreColor; //QColor (24, 30, 32);
+	style.bold = defStyle.bold;
+	style.italic = defStyle.italic;
+	style.underline = defStyle.underline;
+
+	if (theme == colorThemes.end()) {
+		theme = themeDef;
+	}
+	
+	if (theme != colorThemes.end()) {
+		map <QString, TextStyle>::iterator fStyle;
+		fStyle = theme->second.styles.find(styleName);
+		if (fStyle != theme->second.styles.end()) {
+			if (fStyle->second.fontName != "") {
+				style.fontName = fStyle->second.fontName;
+			}
+			if (fStyle->second.fontSize > 0) {
+				style.fontSize = fStyle->second.fontSize;
+			}
+
+			style.italic = fStyle->second.italic;
+			style.bold = fStyle->second.bold;
+			style.underline = fStyle->second.underline;
+
+			int alpha = fStyle->second.foreColor.alpha();
+			if (alpha != 100) {
+				style.foreColor = fStyle->second.foreColor;
+			}			
+			alpha = fStyle->second.backColor.alpha();
+			if (alpha != 100) {
+				style.backColor = fStyle->second.backColor;
+			}
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------
+
+
+int Config::LoadStyles(void)
+{
+	QString filepath = QDir::cleanPath(appPath + QDir::separator() + "config" + 
+											QDir::separator() + "color_themes.xml");
+
+#if defined(Q_OS_LINUX) || defined(Q_OS_MAC)
+	if(!QFile::exists(filepath))
+		filepath = "/etc/mariamole/config/color_themes.xml";
+#endif
+
+	QFile file(filepath);
+	
+	if (file.open(QIODevice::ReadOnly) == false) {
+		return 205;
+	}
+
+	QDomDocument doc("mydocument");
+	if (doc.setContent(&file) == false) {
+		file.close();
+		return 206;
+	}
+
+	file.close();
+
+	QDomElement docElem = doc.documentElement();
+	QDomNode xmlThemes = docElem.firstChild();
+	
+	//if (xmlThemes.isNull() == false) {
+	//QDomNode xmlTheme = xmlThemes.firstChild();
+	QDomNode xmlTheme = docElem.firstChild();
+	while (xmlTheme.isNull() == false) {
+		ColorTheme theme;
+		QDomElement elemName = xmlTheme.toElement();
+		theme.name = elemName.attribute("name");
+		QDomNode xmlStyle = xmlTheme.firstChild();			
+		while (xmlStyle.isNull() == false) {
+			TextStyle style;
+			QDomElement elStyle = xmlStyle.toElement();
+			QString styleName = elStyle.attribute("name");
+			style.fontName = elStyle.attribute("fontName", "");
+			style.fontSize = elStyle.attribute("fontSize", "-1").toInt();
+			style.foreColor = QColor(0,0,0,100);
+			style.backColor = QColor(0,0,0,100);
+			QString str = "#" + elStyle.attribute("foreColor", "");
+			if (str != "#") {
+				style.foreColor = QColor(str);
+			}
+			str = "#" + elStyle.attribute("backColor", "");
+			if (str != "#") {
+				style.backColor = QColor(str);
+			}
+			/*if (c >= 0) {
+				style.foreColor = c;
+			} else {
+				style.foreColor = QColor(0,0,0,100);
+			}
+			c = elStyle.attribute("backColor", "-1").toInt();
+			if (c >= 0) {
+				style.backColor = c;
+			} else {
+				style.backColor = QColor(0,0,0,100);
+			}*/
+			style.bold = (elStyle.attribute("bold", "0") == "1");
+			style.underline = (elStyle.attribute("underline", "0") == "1");
+			style.italic = (elStyle.attribute("italic", "0") == "1");				
+
+			if (styleName != "") {
+				theme.styles.insert(pair <QString, TextStyle> (styleName, style));
+			}
+			xmlStyle = xmlStyle.nextSibling();
+		}
+			
+		colorThemes.insert (pair <QString, ColorTheme> (theme.name, theme));
+		xmlTheme = xmlTheme.nextSibling();
+	}		
+	return 0;
+}
+
+//-----------------------------------------------------------------------------
+
 QString Config::DecodeMacros(QString inputText, Project const * const project)
 {
 	QString outputText = inputText;
@@ -171,23 +369,32 @@ QString Config::DecodeMacros(QString inputText, Project const * const project)
 	map <QString, QString> dictionary;
 
 	if ( (board != boards.end() && build != builds.end() ) ) {
-		QString corePath = appPath + "/" + board->second.build_core; 
-		corePath += "/" + board->second.build_core + "/cores"; 
-		corePath += "/" + board->second.build_core;	
+
+
+    QString corePath = arduinoInstall + "/hardware/arduino/cores/" + board->second.build_core;
+    qDebug() << "corePath" << corePath;
+
 		dictionary.insert (pair <QString, QString> ("$(ARDUINO_CORE)", corePath));
 
-		QString variantPath = appPath + "/" + board->second.build_core; 
-		variantPath += "/" + board->second.build_core + "/variants"; 
-		variantPath += "/" + board->second.build_variant;
+		QString variantPath = arduinoInstall + "/hardware/arduino/variants/" + board->second.build_variant;
+
 		dictionary.insert (pair <QString, QString> ("$(ARDUINO_VARIANT)", variantPath));
 	}
 
-	//QString qApp->applicationDirPath() + ;
-	dictionary.insert (pair <QString, QString> ("$(ARDUINO_LIBS)", appPath + "/arduino/arduino/libraries"));
+	dictionary.insert (pair <QString, QString> ("$(ARDUINO_LIBS)", arduinoInstall + "/libraries"));
 
-	dictionary.insert (pair <QString, QString> ("$(LIBRARIES)", projectLibPaths + ";" + appPath + "/arduino/arduino/libraries;" + libPaths + ";" + config.extraArduinoLibsSearchPaths ));
+
+  dictionary.insert (pair <QString, QString> ("$(LIBRARIES)", projectLibPaths
+																															+ ";"
+																															+ arduinoInstall
+																															+ "/libraries;"
+																															+ libPaths +
+																															";" +
+																															config.extraArduinoLibsSearchPaths));
+
 
 	dictionary.insert (pair <QString, QString> ("$(INCLUDES)", includePaths + ";" + projectIncludePaths));
+  
 
 	map <QString, QString>::iterator dict;
 	for (dict = dictionary.begin(); dict != dictionary.end(); dict++) {
@@ -199,27 +406,7 @@ QString Config::DecodeMacros(QString inputText, Project const * const project)
 		}
 	}
 		
-	/*if ((board != boards.end() && build != builds.end()) {
-		QString corePath = appPath + "/" + board->second.build_core; 
-		corePath += "/" + board->second.build_core + "/cores"; 
-		corePath += "/" + board->second.build_core;	
-		int pos = outputText.indexOf("$(ARDUINO_CORE)");
-		while (pos >= 0) {
-			outputText.remove(pos, QString("$(ARDUINO_CORE)").size());
-			outputText.insert(pos, corePath);
-			pos = outputText.indexOf("$(ARDUINO_CORE)");
-		}
-	}
 
-	QString variantPath = appPath + "/" + board->second.build_core; 
-	variantPath += "/" + board->second.build_core + "/variants"; 
-	variantPath += "/" + board->second.build_variant;
-	pos = outputText.indexOf("$(ARDUINO_VARIANT)");
-	while (pos >= 0) {
-		outputText.remove(pos, QString("$(ARDUINO_VARIANT)").size());
-		outputText.insert(pos, variantPath);
-		pos = outputText.indexOf("$(ARDUINO_VARIANT)");
-	}*/
 	return outputText;
 }
 
@@ -244,17 +431,18 @@ bool Config::Save(void)
 		"MariaMole", "config");
 
 	settings.beginGroup("main");
-    settings.setValue("workspace", workspace);
+	settings.setValue("workspace", workspace);
 	settings.setValue("useMenuButton", useMenuButton);
-	
-    settings.endGroup();
+	settings.endGroup();
 	
 	settings.beginGroup("build");
 	settings.setValue("includePaths", includePaths);
 	settings.setValue("libPaths", libPaths);
 	settings.setValue("libs", libs);
-	//settings.setValue("coreLibsPath", coreLibsPath);	
-	settings.setValue("uploadTimeout", uploadTimeout);		
+	//settings.setValue("arduinoCoreOpt", arduinoCoreOpt);
+	settings.setValue("arduinoInstall", arduinoInstall);
+	settings.setValue("uploadTimeout", uploadTimeout);	
+	settings.setValue("avrPath", avrPath);	
 	settings.endGroup();
 
 	settings.beginGroup("arduino");
@@ -262,8 +450,11 @@ bool Config::Save(void)
 	settings.endGroup();
 
 	settings.beginGroup("ui");
+	settings.setValue("themeName", themeName);			
 	settings.setValue("editorFontName", editorFontName);			
 	settings.setValue("editorFontSize", editorFontSize);			
+	settings.setValue("editorColorName", editorColorName);
+	settings.setValue("highlightBraces", highlightBraces);	
 	settings.endGroup();
 
 	settings.beginGroup("compiler");
@@ -303,7 +494,7 @@ QString Config::DecodeLibraryPath(QString libPath)
 		if (dirPath.length() < 2) {
 			continue;
 		}
-		if ( (dirPath.at(dirPath.length()-1) == "/") || (dirPath.at(dirPath.length()-1) == "\\")) {
+		if ( (dirPath.at(dirPath.length()-1) == '/') || (dirPath.at(dirPath.length()-1) == '\\')) {
 			dirPath = dirPath.left(dirPath.length()-1);
 		}
 		dirPath = path1 + dirPath + path2;
@@ -319,14 +510,14 @@ QString Config::DecodeLibraryPath(QString libPath)
 
 QString Config::LocateFileUsingSearchPaths(QString filename, QString searchPaths, bool isDir)
 {
-	QStringList list = DecodeMacros(searchPaths, NULL).split(";");
+    QStringList list = DecodeMacros(searchPaths, NULL).split(";");
 	
 	for (int i=0; i < list.count(); i++) {
 		QString dirPath = list[i].trimmed();
 		if (dirPath.length() < 2) {
 			continue;
 		}
-		if ( (dirPath.at(dirPath.length()-1) == "/") || (dirPath.at(dirPath.length()-1) == "\\")) {
+		if ( (dirPath.at(dirPath.length()-1) == '/') || (dirPath.at(dirPath.length()-1) == '\\')) {
 			dirPath = dirPath.left(dirPath.length()-1);
 		}
 		dirPath += "/" + filename;

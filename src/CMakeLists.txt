@@ -1,13 +1,20 @@
-
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # Instruct CMake to run moc automatically when needed.
 set(CMAKE_AUTOMOC ON)
+
+if(EXISTS "${PROJECT_SOURCE_DIR}/src/git_version.h")
+	MESSAGE("GIT VERSION HEADER ALREADY EXIST")
+else()
+	EXEC_PROGRAM(bash ARGS ${PROJECT_SOURCE_DIR}/src/get_git_version_unix.sh > ${PROJECT_SOURCE_DIR}/src/git_version.h)
+endif()
+
 
 # Find the QtWidgets library
 find_package(Qt5Widgets)
 include_directories(${Qt5Widgets_INCLUDE_DIRS})
 
 
+find_package(Qt5Core)
 
 ## Compiler flags
 if(CMAKE_COMPILER_IS_GNUCXX)
@@ -17,10 +24,12 @@ endif()
 
 
 
+
+
 file(GLOB_RECURSE UI_FILES *.ui)
-file(GLOB_RECURSE CODE_FILES builder.cpp build_message_item.cpp config.cpp editortab.cpp  mainwindow.cpp project.cpp setworkspace.cpp
-                             workspace.cpp builderthread.cpp buildwindow.cpp editor.cpp  main.cpp message_handler.cpp projectproperties.cpp 
-														    mm_utils.cpp wizard.cpp)
+file(GLOB_RECURSE CODE_FILES about.cpp builder.cpp builderthread.cpp build_message_item.cpp buildwindow.cpp burnbootloader.cpp
+		  qserialmonitor.cpp config.cpp editor.cpp editortab.cpp getuserstring.cpp launcher.cpp main.cpp mainwindow.cpp
+                        message_handler.cpp mm_utils.cpp preferences.cpp project.cpp projectproperties.cpp qserialselector.cpp						   	      					        serialmonitor.cpp setworkspace.cpp wizard.cpp workspace.cpp)
 
 
 qt5_wrap_ui(UI_HEADERS ${UI_FILES})
@@ -32,7 +41,18 @@ add_executable(${CMAKE_PROJECT_NAME}
   ${RESOURCE_FILES}
 )
 
+if(APPLE)
+	set(LINK_LIBS "-L$ENV{HOME}/Qt/5.3/clang_64/lib -F$ENV{HOME}/Qt/5.3/clang_64/lib -framework QtWidgets -framework QtGui -framework QtCore -framework QtXml -framework QtSerialPort -lqscintilla2")
+else()
+	set(LINK_LIBS Qt5::Widgets Qt5Xml Qt5SerialPort qt5scintilla2)
+endif(APPLE)
 
-target_link_libraries(${CMAKE_PROJECT_NAME}
-  Qt5::Widgets Qt5Xml qscintilla2
-)
+
+target_link_libraries(${CMAKE_PROJECT_NAME} ${LINK_LIBS})
+
+
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/)
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/installer/common_files/ DESTINATION /etc/mariamole)
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/installer/common_files/ DESTINATION /etc/mariamole)
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/installer/common_files/mariamole DESTINATION /usr/share)
+INSTALL(FILES ${PROJECT_SOURCE_DIR}/installer/common_files/mariamole/MariaMole.desktop DESTINATION /usr/share/applications/)

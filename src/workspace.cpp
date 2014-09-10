@@ -33,9 +33,8 @@ bool Workspace::Open(QString workPath)
 
 	projects.clear();
 
-	if (dir.exists() == false) {
+	if (dir.exists() == false)
 		return false;
-	}
 
 	config.workspace = workPath;
 
@@ -114,7 +113,7 @@ Project * Workspace::GetCurrentProject(void)
 		return NULL;
 	}*/
 
-	for (int i=0; i < projects.size(); i++) {
+    for (unsigned int i=0; i < projects.size(); i++) {
 		if (projects.at(i).current) {
 			return &(projects.at(i));
 		}
@@ -151,10 +150,20 @@ bool Workspace::AddProject(QString name, QString importSketch)
 	Project project;
 	project.name = name;	
 
-	if (importSketch == "") {		
+	if (importSketch == "") {
+#if defined(Q_OS_WIN) || defined(Q_OS_MAC)		
 		CopyFileToProject(qApp->applicationDirPath() + "/templates/main.cpp", project.name + ".cpp", &project);
 		//CopyFileToProject(qApp->applicationDirPath() + "/templates/main.h", "main.h", &project);		
 		CopyFileToProject(qApp->applicationDirPath() + "/templates/mariamole_auto_generated.h", "mariamole_auto_generated.h", &project);		
+#endif
+
+#if defined(Q_OS_LINUX)
+		CopyFileToProject(config.ConfigPath() + "/templates/main.cpp", project.name + ".cpp", &project);
+		//CopyFileToProject(qApp->applicationDirPath() + "/templates/main.h", "main.h", &project);		
+		CopyFileToProject(config.ConfigPath() + "/templates/mariamole_auto_generated.h", "mariamole_auto_generated.h", &project);		
+		//qDebug() << config.ConfigPath()  << "/templates/mariamole_auto_generated.h"
+#endif
+
 	} else {
 
 		if (ImportSketch(&project, importSketch) == false) {
@@ -216,8 +225,14 @@ bool Workspace::ImportSketch(Project * project, QString sketchFullPath)
 	pfile.type = ptSource;
 	project->files.push_back(pfile);
 
-	//CopyFileToProject(qApp->applicationDirPath() + "/templates/main.h", "main.h", project);		
-	CopyFileToProject(qApp->applicationDirPath() + "/templates/mariamole_auto_generated.h", "mariamole_auto_generated.h", project);		
+	//CopyFileToProject(qApp->applicationDirPath() + "/templates/main.h", "main.h", project);
+#if defined(Q_OS_WIN) || defined(Q_OS_MAC)
+    CopyFileToProject(qApp->applicationDirPath() + "/templates/mariamole_auto_generated.h", "mariamole_auto_generated.h", project);
+#endif
+
+#if defined(Q_OS_LINUX)
+		CopyFileToProject(config.ConfigPath() + "/templates/mariamole_auto_generated.h", "mariamole_auto_generated.h", project);
+#endif
 
 	ImportFilesFromSketchDirectory(project, path);
 
@@ -252,6 +267,9 @@ void Workspace::ImportFilesFromSketchDirectory(Project * project, QString sketch
 
 bool Workspace::ImportLibrary(Project * project, QString libPath, QString prefixPath)
 {
+
+    //qDebug() << "ImportLibrary";
+
 	// first, find the library path
 	if (libPath.indexOf("/") < 0) {
 		QString libName = libPath;
@@ -264,42 +282,47 @@ bool Workspace::ImportLibrary(Project * project, QString libPath, QString prefix
 
 	ImportLibraryFilesRecursively(project, libPath, libPath);
 
-	// Add the list of all .h files to the automatically generated header file	
-	QString autoFileName = qApp->applicationDirPath() + "/templates/mariamole_auto_generated.h";// config.workspace + "/" + project->name + "/source/mariamole_auto_generated.h";
+	// Add the list of all .h files to the automatically generated header file
+#if defined(Q_OS_LINUX)
+	QString autoFileName = qApp->applicationDirPath() + "/templates/mariamole_auto_generated.h";
+#else
+	QString autoFileName = config.ConfigPath() + "/templates/mariamole_auto_generated.h";
+#endif
 	QFile autoFile(autoFileName);
 	autoFile.open(QFile::ReadOnly | QFile::Text);
     QTextStream stream(&autoFile);
 	QString fileContent = stream.readAll();
 	autoFile.close();
 
-	// Remove the last #endif from the file
-	while (fileContent.at(fileContent.length()-1) != '#') {
+	if (fileContent.length() > 1) {
+		// Remove the last #endif from the file
+		while (fileContent.at(fileContent.length()-1) != '#') {
+			fileContent.remove(fileContent.length()-1, 1);
+		}
 		fileContent.remove(fileContent.length()-1, 1);
-	}
-	fileContent.remove(fileContent.length()-1, 1);
-	//fileContent; += "\n\n";
+		//fileContent; += "\n\n";
 
-	// add all header files
-	for (int i=0; i < project->files.size(); i++) {
-		if (project->files.at(i).type == ptExternal) {
-			QString name = QFileInfo(project->files.at(i).name).fileName();
-			QString ext = QFileInfo(project->files.at(i).name).suffix().toUpper();
-			if ( (ext == "H") || (ext == "HPPC") ) {
-				fileContent += "#include <" + name + ">\n";
+		// add all header files
+		for (unsigned int i=0; i < project->files.size(); i++) {
+			if (project->files.at(i).type == ptExternal) {
+				QString name = QFileInfo(project->files.at(i).name).fileName();
+				QString ext = QFileInfo(project->files.at(i).name).suffix().toUpper();
+				if ( (ext == "H") || (ext == "HPPC") ) {
+					fileContent += "#include <" + name + ">\n";
+				}
 			}
 		}
+		fileContent += "\n#endif\n";
+
+		autoFileName = config.workspace + "/" + project->name + "/source/mariamole_auto_generated.h";
+		QFile autoFileOutput(autoFileName);	
+		autoFileOutput.open(QFile::WriteOnly);
+		//autoFileOutput.setlin
+		//setEolMode(QsciScintilla::EolUnix);
+		QTextStream streamOutput(&autoFileOutput);	
+		streamOutput << fileContent;
+		autoFileOutput.close();
 	}
-	fileContent += "\n#endif\n";
-
-	autoFileName = config.workspace + "/" + project->name + "/source/mariamole_auto_generated.h";
-	QFile autoFileOutput(autoFileName);	
-	autoFileOutput.open(QFile::WriteOnly);
-	//autoFileOutput.setlin
-	//setEolMode(QsciScintilla::EolUnix);
-    QTextStream streamOutput(&autoFileOutput);	
-	streamOutput << fileContent;
-	autoFileOutput.close();
-
 	modified = true;
 
 	return true;
@@ -309,12 +332,14 @@ bool Workspace::ImportLibrary(Project * project, QString libPath, QString prefix
 
 void Workspace::ImportLibraryFilesRecursively(Project * project, QString path, QString libPath)
 {
+
 	QString libName = QFileInfo(libPath).fileName();
+	qDebug() << libName;
 
 	int pathLen = path.length() - libPath.length();				
 	QString pref;
-	if (pathLen > 0) {
-		pref = path.right(pathLen);
+	if (pathLen > 1) {
+		pref = path.right(pathLen-1);
 	}
 
 	project->includePaths += ";$(LIBRARIES)/" + libName;
@@ -327,8 +352,9 @@ void Workspace::ImportLibraryFilesRecursively(Project * project, QString path, Q
 	for (int f=0; f < files.size(); f++) {	
 		if (files.at(f).isDir()) {
 			QString pref = files.at(f).fileName();
+			qDebug() << pref;
 			if (pref.toUpper() != "EXAMPLES") {
-				ImportLibraryFilesRecursively(project, path + "/" + pref, libPath);
+                ImportLibraryFilesRecursively(project, path + "/" + pref, libPath);
 				//ok = ok & ImportLibrary(project, libPath + "/" + pref, pref + "/");
 			}
 		} else {
@@ -345,7 +371,7 @@ void Workspace::ImportLibraryFilesRecursively(Project * project, QString path, Q
 
 				//Only add this file if its wasn't yet preset at the project
 				bool found = false;
-				for (int i=0; i < project->files.size(); i++) {
+                for (unsigned int i=0; i < project->files.size(); i++) {
 					if (project->files.at(i).name == file.name) {
 						found = true;
 						break;
@@ -382,7 +408,7 @@ bool Workspace::CopyFileToProject(QString input, QString output, Project * proje
 bool Workspace::Save(void)
 {
 	bool ok = true;
-	for (int i=0; i < projects.size(); i++) {
+    for (unsigned int i=0; i < projects.size(); i++) {
 		if (projects.at(i).Save(config.workspace) == false) {
 			ok = false;
 			msg.Add("Could not save project '" + projects.at(i).name + "'", mtError);
@@ -427,9 +453,9 @@ QString Workspace::GetFullFilePath(QString projectName, QString filename)
 
 //-----------------------------------------------------------------------------
 
-bool Workspace::AddNewFile(QString fullPath)
+bool Workspace::AddNewFile(QString projectName, QString fullPath)
 {
-	Project * project = GetCurrentProject();
+	Project * project = FindProject(projectName); //GetCurrentProject();
 	if (project == NULL) {
 		return false;
 	}
@@ -589,7 +615,7 @@ void Workspace::RemoveProject(QString projectName)
 		return;
 	}
 
-	for (int i=0; i < projects.size(); i++) {
+    for (unsigned int i=0; i < projects.size(); i++) {
 		if (projects.at(i).name == projectName) {
 			projects.erase(projects.begin() + i);
 			break;
